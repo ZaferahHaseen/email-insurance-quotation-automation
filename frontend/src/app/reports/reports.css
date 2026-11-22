@@ -1,0 +1,551 @@
+
+/* =========================================
+   REPORTS PAGE
+========================================= */
+
+* {
+  box-sizing: border-box;
+}
+
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.reports-page {
+  min-height: 100vh;
+  width: 100%;
+  background: #f4f6f9;
+  padding: 32px 40px;
+  font-family: Arial, Helvetica, sans-serif;
+  color: #182230;
+}
+
+
+/* =========================================
+   HEADER
+========================================= */
+
+.reports-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 25px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.back-arrow-btn {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  border: 1px solid #d9dee7;
+  border-radius: 9px;
+  color: #344054;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.back-arrow-btn:hover {
+  background: #edf2f7;
+  border-color: #c4cedb;
+}
+
+.back-arrow-btn:focus-visible {
+  outline: 2px solid #657994;
+  outline-offset: 3px;
+}
+
+.header-content {
+  min-width: 0;
+}
+
+.header-content h1 {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1.25;
+  color: #182230;
+}
+
+.header-content p {
+  margin: 7px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #7a8493;
+}
+
+
+/* =========================================
+   TOOLBAR
+========================================= */
+
+.report-toolbar {
+  background: #ffffff;
+  border: 1px solid #e0e5ec;
+  border-radius: 10px;
+  padding: 15px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.toolbar-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.toolbar-title span {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #9aa2af;
+}
+
+.toolbar-title strong {
+  font-size: 13px;
+}
+
+.toolbar-actions {
+  display: flex;
+  gap: 9px;
+}
+
+.toolbar-actions select {
+  border: 1px solid #d8dee7;
+  background: #ffffff;
+  border-radius: 7px;
+  padding: 9px 12px;
+  font-size: 12px;
+  color: #475467;
+  cursor: pointer;
+}
+
+.export-btn {
+  border: none;
+  border-radius: 7px;
+  padding: 9px 14px;
+  background: #273b59;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.export-btn:hover {
+  background: #1d2e48;
+}
+
+
+/* =========================================
+   METRICS
+========================================= */
+
+.metrics-section {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.metric-card {
+  min-width: 0;
+  background: #ffffff;
+  border: 1px solid #e0e5ec;
+  border-radius: 10px;
+  padding: 19px 20px;
+}
+
+.metric-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.metric-title {
+  font-size: 9px;
+  letter-spacing: 1px;
+  font-weight: 700;
+  color: #8a94a3;
+}
+
+.metric-icon {
+  width: 29px;
+  height: 29px;
+  flex-shrink: 0;
+  border-radius: 7px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #f0f3f7;
+  color: #536174;
+  font-size: 13px;
+}
+
+.metric-number {
+  display: block;
+  font-size: 27px;
+  margin-top: 13px;
+}
+
+.metric-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 10px;
+  color: #98a1ae;
+}
+
+.positive {
+  color: #3e7b61;
+  font-weight: 700;
+}
+
+.attention {
+  color: #ad7726;
+  font-weight: 600;
+}
+
+
+/* =========================================
+   ANALYTICS GRID
+========================================= */
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.analytics-card {
+  min-width: 0;
+  background: #ffffff;
+  border: 1px solid #e0e5ec;
+  border-radius: 10px;
+  padding: 21px;
+}
+
+.analytics-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.analytics-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.analytics-header p {
+  margin: 5px 0 0;
+  font-size: 11px;
+  color: #8a94a3;
+}
+
+.more-btn {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: #8b95a4;
+  cursor: pointer;
+}
+
+
+/* =========================================
+   BAR CHART
+========================================= */
+
+.chart-area {
+  height: 220px;
+  display: flex;
+  margin-top: 25px;
+}
+
+.y-axis {
+  width: 35px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding-bottom: 22px;
+}
+
+.y-axis span {
+  font-size: 9px;
+  color: #a0a8b4;
+}
+
+.chart {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.grid-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #edf0f4;
+}
+
+.line-1 {
+  top: 0;
+}
+
+.line-2 {
+  top: 25%;
+}
+
+.line-3 {
+  top: 50%;
+}
+
+.line-4 {
+  top: 75%;
+}
+
+.bars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+  padding: 0 20px;
+}
+
+.bar-group {
+  height: 100%;
+  width: 45px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 7px;
+}
+
+.bar {
+  width: 28px;
+  min-height: 15px;
+  border-radius: 5px 5px 2px 2px;
+  background: #657994;
+}
+
+.bar-group span {
+  font-size: 9px;
+  color: #8b95a4;
+}
+
+
+/* =========================================
+   LEGEND
+========================================= */
+
+.chart-legend {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-top: 1px solid #edf0f4;
+  margin-top: 8px;
+  padding-top: 13px;
+  font-size: 10px;
+  color: #7f8998;
+}
+
+.legend-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #657994;
+  margin-right: 5px;
+}
+
+
+/* =========================================
+   CATEGORY LIST
+========================================= */
+
+.category-list {
+  margin-top: 28px;
+}
+
+.category-row {
+  margin-bottom: 22px;
+}
+
+.category-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+
+.category-info > span:nth-child(2) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.category-info strong {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 11px;
+}
+
+.category-marker {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #657994;
+}
+
+.renewal-marker {
+  background: #8797ac;
+}
+
+.claim-marker {
+  background: #a4aebc;
+}
+
+.general-marker {
+  background: #c0c7d0;
+}
+
+.progress {
+  height: 6px;
+  background: #edf0f4;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.progress span {
+  display: block;
+  height: 100%;
+  background: #657994;
+  border-radius: 10px;
+}
+
+
+/* =========================================
+   FOOTER
+========================================= */
+
+.reports-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 17px 3px;
+  font-size: 10px;
+  color: #929aa7;
+}
+
+.reports-footer button {
+  border: none;
+  background: transparent;
+  color: #536b8e;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reports-footer button:hover {
+  color: #273b59;
+}
+
+
+/* =========================================
+   RESPONSIVE
+========================================= */
+
+@media (max-width: 1000px) {
+  .reports-page {
+    padding: 28px;
+  }
+
+  .metrics-section {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 650px) {
+  .reports-page {
+    padding: 20px 16px;
+  }
+
+  .header-left {
+    gap: 11px;
+  }
+
+  .back-arrow-btn {
+    width: 38px;
+    height: 38px;
+  }
+
+  .header-content h1 {
+    font-size: 25px;
+  }
+
+  .header-content p {
+    font-size: 12px;
+  }
+
+  .report-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbar-actions {
+    width: 100%;
+  }
+
+  .toolbar-actions select,
+  .export-btn {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .metrics-section {
+    grid-template-columns: 1fr;
+  }
+
+  .analytics-card {
+    padding: 16px;
+  }
+
+  .bars {
+    padding: 0 8px;
+  }
+
+  .chart-legend {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

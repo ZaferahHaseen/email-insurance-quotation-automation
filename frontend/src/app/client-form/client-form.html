@@ -1,0 +1,979 @@
+<div class="cf-page">
+
+  <!-- HEADER -->
+  <header class="cf-header">
+    <div class="cf-header-inner">
+      <div class="cf-brand">
+        <span class="cf-logo">IQ</span>
+        <div class="cf-brand-text">
+          <strong>IQAS</strong>
+          <small>Insurance Quotation Automation System</small>
+        </div>
+      </div>
+
+      <div class="cf-header-secure">
+        <span class="cf-secure-icon">✓</span>
+        <span>Secure Application</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- HERO -->
+  <section class="cf-hero">
+    <div class="cf-hero-content">
+      <span class="cf-eyebrow">YOUR INSURANCE, MADE SIMPLE</span>
+      <h1>Get your insurance quotation</h1>
+      <p>
+        Complete your details securely and receive an insurance quotation
+        tailored to your requirements.
+      </p>
+      <div class="cf-hero-points">
+        <span>✓ Simple application</span>
+        <span>✓ Secure verification</span>
+        <span>✓ Quick quotation</span>
+      </div>
+    </div>
+    <div class="cf-hero-decoration">
+      <div class="cf-hero-icon">🛡</div>
+    </div>
+  </section>
+
+  <main class="cf-main">
+
+    <!-- LOADING -->
+    @if (loading()) {
+      <div class="cf-card cf-center">
+        <span class="cf-spinner"></span>
+        <p>Preparing your application...</p>
+      </div>
+    }
+
+    <!-- ERROR -->
+    @if (error()) {
+      <div class="cf-alert cf-alert-error">
+        <span class="cf-alert-icon">!</span>
+        <span>{{ error() }}</span>
+      </div>
+    }
+
+    <!-- QUOTATION RESULT -->
+    @if (result(); as r) {
+      <div class="cf-card cf-result"
+           [class.cf-result-ok]="r.status === 'QUOTATION_SENT'">
+
+        <div class="cf-result-icon">
+          {{ r.status === 'QUOTATION_SENT' ? '✓' : 'i' }}
+        </div>
+
+        @if (r.status === 'QUOTATION_SENT') {
+          <span class="cf-eyebrow">APPLICATION COMPLETED</span>
+          <h2>
+            {{ type() === 'TRAVEL'
+              ? 'Travel quotation submitted successfully!'
+              : 'Quotation submitted successfully!' }}
+          </h2>
+        } @else {
+          <span class="cf-eyebrow">APPLICATION UPDATE</span>
+          <h2>Almost there</h2>
+        }
+
+        <p>{{ r.message }}</p>
+
+        <div class="cf-result-details">
+          <div>
+            <small>Applicant</small>
+            <strong>{{ a.name }}</strong>
+          </div>
+
+          <div>
+            <small>Insurance type</small>
+            <strong>
+              {{ type() === 'TRAVEL'
+                ? 'Travel Insurance'
+                : (form()?.label || type()) }}
+            </strong>
+          </div>
+
+          @if (type() === 'TRAVEL') {
+            <div>
+              <small>Travellers</small>
+              <strong>{{ values['travellers'] }}</strong>
+            </div>
+          }
+        </div>
+
+        @if (r.quotationNumber) {
+          <div class="cf-qno">
+            <small>Quotation number</small>
+            <b>{{ r.quotationNumber }}</b>
+          </div>
+        }
+
+        @if (r.blockedFields?.length) {
+          <div class="cf-alert cf-alert-warn">
+            These saved details were not changed:
+            {{ r.blockedFields!.join(', ') }}
+          </div>
+        }
+
+        @if (r.status === 'QUOTATION_SENT') {
+          <p class="cf-success-note">
+            ✓ Your submission has been completed successfully.
+          </p>
+        }
+      </div>
+    }
+
+    <!-- INSURANCE TYPE SELECTION -->
+    @if (!type() && !loading() && !result()) {
+      <section class="cf-card cf-selection-card">
+        <div class="cf-section-heading">
+          <span class="cf-section-kicker">GET STARTED</span>
+          <h2>What would you like to insure?</h2>
+          <p>Select an insurance category to begin your application.</p>
+        </div>
+
+        <div class="cf-types">
+          @for (t of types(); track t.code) {
+            <button
+              type="button"
+              class="cf-type"
+              (click)="pick(t.code)">
+
+              <span class="cf-type-content">
+                <span class="cf-type-name">{{ t.label }}</span>
+                <span class="cf-type-description">
+                  Apply for {{ t.label.toLowerCase() }}
+                </span>
+              </span>
+
+              <span class="cf-type-go">→</span>
+            </button>
+          }
+        </div>
+      </section>
+    }
+
+    <!-- PROGRESS INDICATOR -->
+    @if (form() && !result()) {
+      <section class="cf-progress-card">
+        <div class="cf-progress-heading">
+          <div>
+            <span class="cf-section-kicker">APPLICATION PROCESS</span>
+            <h2>Complete your application</h2>
+          </div>
+
+          <span class="cf-progress-label">
+            @if (unlocked()) {
+              Step 2 of 2
+            } @else {
+              Step 1 of 2
+            }
+          </span>
+        </div>
+
+        <div class="cf-progress-steps">
+
+          <div class="cf-progress-step"
+               [class.cf-progress-active]="!unlocked()"
+               [class.cf-progress-done]="unlocked()">
+            <span class="cf-progress-number">
+              @if (unlocked()) {
+                ✓
+              } @else {
+                1
+              }
+            </span>
+            <span>Phone verification</span>
+          </div>
+
+          <div class="cf-progress-line"
+               [class.cf-progress-line-done]="unlocked()">
+          </div>
+
+          <div class="cf-progress-step"
+               [class.cf-progress-active]="unlocked()">
+            <span class="cf-progress-number">2</span>
+            <span>Application details</span>
+          </div>
+
+        </div>
+      </section>
+    }
+
+    <!-- STEP 1: PHONE VERIFICATION -->
+    @if (form() && !result() && !unlocked() && matchingClients().length === 0) {
+      <section class="cf-card cf-verification-card">
+
+        <div class="cf-card-heading">
+          <span class="cf-heading-icon">01</span>
+          <div>
+            <span class="cf-section-kicker">STEP 1</span>
+            <h2>Verify your phone number</h2>
+            <p>Confirm your mobile number to securely continue.</p>
+          </div>
+        </div>
+
+        @if (link()?.existingClient) {
+          <div class="cf-alert cf-alert-info">
+            <strong>Welcome back{{ link()!.client?.name
+              ? ', ' + link()!.client!.name
+              : '' }}.</strong>
+
+            <p>
+              Your verification code will be sent to your registered
+              mobile number.
+            </p>
+
+            <b>{{ link()!.client?.phoneMasked }}</b>
+
+            @if (link()!.missingFields.length) {
+              <div class="cf-need">
+                <strong>Still needed:</strong>
+                @for (m of link()!.missingFields; track m) {
+                  <span class="cf-chip">{{ m }}</span>
+                }
+              </div>
+            }
+          </div>
+        } @else if (!token) {
+          <label class="cf-phone-label">
+            Mobile number
+            <span class="cf-required-label">Required</span>
+
+            <div class="cf-phone-group">
+              <select
+                class="cf-input cf-phone-code"
+                [(ngModel)]="phoneCallingCode"
+                (ngModelChange)="onPhoneCallingCodeChange()"
+                name="otpPhoneCallingCode"
+                autocomplete="off"
+                [disabled]="busy() || otpSent()">
+
+                @for (c of countries(); track c.code) {
+                  @if (getCallingCode(c)) {
+                    <option [value]="getCallingCode(c)">
+                      {{ getCallingCode(c) }} ({{ c.code }})
+                    </option>
+                  }
+                }
+              </select>
+
+              <input
+                class="cf-input cf-phone-number"
+                type="tel"
+                [(ngModel)]="a.phone"
+                (ngModelChange)="onNewPhoneChange()"
+                name="otpPhone"
+                placeholder="Enter your mobile number"
+                autocomplete="off"
+                [disabled]="busy() || otpSent()"
+                required />
+            </div>
+          </label>
+        } @else {
+          <div class="cf-alert cf-alert-info">
+            Verify your phone number to continue with this application.
+          </div>
+        }
+
+        @if (!otpSent()) {
+          <button
+            type="button"
+            class="cf-btn cf-btn-primary cf-btn-full"
+            (click)="sendOtp()"
+            [disabled]="busy() || (!token && !a.phone?.trim())">
+            {{ busy() ? 'Sending...' : 'Send verification code →' }}
+          </button>
+        }
+
+        @if (otpSent()) {
+          <div class="cf-otp-panel">
+            <div class="cf-otp-panel-heading">
+              <strong>Enter your verification code</strong>
+              <small>Enter the 6-digit code sent to your mobile.</small>
+            </div>
+
+            <label>
+              6-digit OTP
+              <input
+                class="cf-input cf-otp-input"
+                type="text"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                [(ngModel)]="otpCode"
+                name="otpCode"
+                maxlength="6"
+                placeholder="• • • • • •"
+                [disabled]="busy()" />
+            </label>
+
+            <button
+              type="button"
+              class="cf-btn cf-btn-primary cf-btn-full"
+              (click)="verifyOtp()"
+              [disabled]="busy() || otpCode.length !== 6">
+              {{ busy() ? 'Verifying...' : 'Verify OTP →' }}
+            </button>
+          </div>
+        }
+
+        @if (otpMsg()) {
+          <div class="cf-otp-msg">{{ otpMsg() }}</div>
+        }
+
+        @if (!token && otpSent()) {
+          <button
+            type="button"
+            class="cf-btn cf-btn-outline"
+            (click)="onNewPhoneChange()">
+            Change mobile number
+          </button>
+        }
+
+        <div class="cf-security-note">
+          <span>🔒</span>
+          Your mobile number is used for verification and customer identification.
+        </div>
+
+      </section>
+    }
+
+    <!-- STEP 2: SELECT EXISTING CUSTOMER -->
+    @if (form() && !result() && !unlocked() && matchingClients().length > 1) {
+      <section class="cf-card cf-verification-card">
+
+        <div class="cf-card-heading">
+          <span class="cf-heading-icon">02</span>
+          <div>
+            <span class="cf-section-kicker">SELECT CUSTOMER</span>
+            <h2>Select your name</h2>
+            <p>
+              Your mobile number is registered with multiple customers.
+              Please select your own name to continue.
+            </p>
+          </div>
+        </div>
+
+        <div class="cf-alert cf-alert-ok">
+          <strong>✓ Mobile number verified successfully</strong>
+          <p>Select the correct customer record below.</p>
+        </div>
+
+        <div class="cf-types">
+          @for (client of matchingClients(); track client.clientCode) {
+            <button
+              type="button"
+              class="cf-type"
+              (click)="selectExistingClient(client)"
+              [disabled]="busy()">
+
+              <span class="cf-type-content">
+                <span class="cf-type-name">
+                  {{ client.name || 'Customer' }}
+                </span>
+
+                <span class="cf-type-description">
+                  Client ID: {{ client.clientCode }}
+                </span>
+              </span>
+
+              <span class="cf-type-go">→</span>
+            </button>
+          }
+        </div>
+
+        @if (busy()) {
+          <div class="cf-otp-msg">
+            Loading selected customer details...
+          </div>
+        }
+
+        @if (otpMsg()) {
+          <div class="cf-otp-msg">{{ otpMsg() }}</div>
+        }
+
+        <div class="cf-security-note">
+          <span>🔒</span>
+          Your selected customer details will be loaded securely.
+        </div>
+
+      </section>
+    }
+
+    <!-- STEP 3: APPLICATION FORM -->
+    @if (form() && !result() && unlocked()) {
+
+      <form (ngSubmit)="submit()" autocomplete="off">
+
+        <!-- AUTOFILL PREVENTION -->
+        <div class="cf-autofill-trap" aria-hidden="true">
+          <input
+            type="text"
+            name="username"
+            autocomplete="username"
+            tabindex="-1" />
+
+          <input
+            type="password"
+            name="password"
+            autocomplete="current-password"
+            tabindex="-1" />
+        </div>
+
+        <!-- APPLICATION INTRO -->
+        <section class="cf-card cf-application-intro">
+          <div class="cf-card-heading">
+            <span class="cf-heading-icon">02</span>
+            <div>
+              <span class="cf-section-kicker">STEP 2</span>
+              <h2>{{ form()!.label }}</h2>
+              <p>Provide the details below to prepare your quotation.</p>
+            </div>
+          </div>
+
+          <div class="cf-alert cf-alert-ok">
+            <strong>✓ Phone verification completed successfully</strong>
+            <p>
+              Your mobile number has been verified.
+              You can now enter your application details.
+            </p>
+          </div>
+
+          @if (otpMsg()) {
+            <div class="cf-otp-msg">{{ otpMsg() }}</div>
+          }
+        </section>
+
+        <!-- TRAVEL: DYNAMIC APPLICANT DETAILS -->
+        @if (type()?.toUpperCase() === 'TRAVEL') {
+
+          @if (applicantFields().length) {
+            <section class="cf-card">
+              <div class="cf-section-title">
+                <span class="cf-step">1</span>
+                <div>
+                  <h3>Applicant details</h3>
+                  <p>Enter the applicant's contact and personal information.</p>
+                </div>
+              </div>
+
+              <div class="cf-grid">
+
+                @for (f of applicantFields(); track f.fieldName) {
+                  <label [class.cf-wide]="f.fieldName === 'phone'">
+
+                    {{ f.displayLabel }}
+
+                    @if (f.isMandatory) {
+                      <i class="cf-req">*</i>
+                    }
+
+                    <!-- VERIFIED PHONE -->
+                    @if (isPhoneField(f.fieldName)) {
+                      <div class="cf-phone-group">
+                        <select
+                          class="cf-input cf-phone-code"
+                          [(ngModel)]="phoneCallingCode"
+                          [name]="'callingCode_' + f.fieldName"
+                          autocomplete="off"
+                          [disabled]="true">
+
+                          @for (c of countries(); track c.code) {
+                            @if (getCallingCode(c)) {
+                              <option [value]="getCallingCode(c)">
+                                {{ getCallingCode(c) }} ({{ c.code }})
+                              </option>
+                            }
+                          }
+                        </select>
+
+                        <input
+                          class="cf-input cf-phone-number"
+                          type="tel"
+                          [ngModel]="a.phone"
+                          [name]="f.fieldName"
+                          autocomplete="off"
+                          [placeholder]="link()?.client?.phoneMasked || 'Verified phone number'"
+                          readonly
+                          [required]="f.isMandatory" />
+                      </div>
+                      <small class="cf-field-note">✓ Mobile number verified</small>
+                    }
+
+                    <!-- COUNTRY OF RESIDENCE -->
+                    @else if (f.fieldName === 'countryOfResidence') {
+                      <select
+                        class="cf-input"
+                        [ngModel]="a.countryOfResidence"
+                        (ngModelChange)="onConfiguredFieldChange(f.fieldName, $event)"
+                        [name]="f.fieldName"
+                        autocomplete="off"
+                        [required]="f.isMandatory">
+
+                        <option value="">Select country</option>
+                        @for (c of countries(); track c.code) {
+                          <option [value]="c.code">{{ c.name }}</option>
+                        }
+                      </select>
+                    }
+
+                    <!-- GENDER -->
+                    @else if (isGenderField(f.fieldName)) {
+                      <select
+                        class="cf-input"
+                        [ngModel]="a.gender"
+                        (ngModelChange)="setConfiguredFieldValue(f.fieldName, $event)"
+                        [name]="f.fieldName"
+                        autocomplete="off"
+                        [required]="f.isMandatory">
+
+                        <option value="">Select gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    }
+
+                    <!-- OTHER APPLICANT FIELDS -->
+                    @else {
+                      <input
+                        class="cf-input"
+                        [type]="inputType(f.dataType)"
+                        [ngModel]="getConfiguredFieldValue(f.fieldName)"
+                        (ngModelChange)="setConfiguredFieldValue(f.fieldName, $event)"
+                        [name]="f.fieldName"
+                        autocomplete="off"
+                        [required]="f.isMandatory"
+                        [placeholder]="f.helpText || ''" />
+                    }
+
+                    @if (f.helpText && !isPhoneField(f.fieldName)) {
+                      <small class="cf-hint">{{ f.helpText }}</small>
+                    }
+                  </label>
+                }
+
+              </div>
+            </section>
+          }
+
+          <!-- TRAVEL: DYNAMIC GOVERNMENT ID -->
+          @if (governmentIdFields().length) {
+            <section class="cf-card">
+              <div class="cf-section-title">
+                <span class="cf-step">2</span>
+                <div>
+                  <h3>Government ID</h3>
+                  <p>Provide your identity document details.</p>
+                </div>
+              </div>
+
+              <div class="cf-alert cf-alert-info">
+                Your identity number is protected and is not displayed in full.
+              </div>
+
+              <div class="cf-grid">
+
+                @for (f of governmentIdFields(); track f.fieldName) {
+                  <label [class.cf-wide]="f.fieldName === 'identityNumber'">
+
+                    {{ f.displayLabel }}
+
+                    @if (f.isMandatory) {
+                      <i class="cf-req">*</i>
+                    }
+
+                    <!-- ID ISSUING COUNTRY -->
+                    @if (f.fieldName === 'identityCountry') {
+                      <select
+                        class="cf-input"
+                        [ngModel]="a.identityCountry"
+                        (ngModelChange)="onConfiguredFieldChange(f.fieldName, $event)"
+                        [name]="f.fieldName"
+                        autocomplete="off"
+                        [required]="f.isMandatory">
+
+                        <option value="">Select country</option>
+                        @for (c of countries(); track c.code) {
+                          <option [value]="c.code">{{ c.name }}</option>
+                        }
+                      </select>
+                    }
+
+                    <!-- ID TYPE -->
+                    @else if (isIdentityTypeField(f.fieldName)) {
+                      <select
+                        class="cf-input"
+                        [ngModel]="a.identityType"
+                        (ngModelChange)="setConfiguredFieldValue(f.fieldName, $event)"
+                        [name]="f.fieldName"
+                        autocomplete="off"
+                        [required]="f.isMandatory"
+                        [disabled]="!a.identityCountry">
+
+                        <option value="">Select identity type</option>
+                        @for (t of idTypes(); track t.code) {
+                          <option [value]="t.code">{{ t.label }}</option>
+                        }
+                      </select>
+                    }
+
+                    <!-- ID NUMBER -->
+                    @else if (isIdentityNumberField(f.fieldName)) {
+                      <input
+                        class="cf-input"
+                        type="password"
+                        [ngModel]="a.identityNumber"
+                        (ngModelChange)="setConfiguredFieldValue(f.fieldName, $event)"
+                        [name]="f.fieldName"
+                        autocomplete="new-password"
+                        [required]="f.isMandatory"
+                        [placeholder]="idExample()
+                          ? 'e.g. ' + idExample()
+                          : (link()?.client?.identityNumberMasked ?? '')" />
+                    }
+
+                    <!-- OTHER CONFIGURED ID FIELDS -->
+                    @else {
+                      <input
+                        class="cf-input"
+                        [type]="inputType(f.dataType)"
+                        [ngModel]="getConfiguredFieldValue(f.fieldName)"
+                        (ngModelChange)="setConfiguredFieldValue(f.fieldName, $event)"
+                        [name]="f.fieldName"
+                        autocomplete="off"
+                        [required]="f.isMandatory"
+                        [placeholder]="f.helpText || ''" />
+                    }
+
+                    @if (f.helpText) {
+                      <small class="cf-hint">{{ f.helpText }}</small>
+                    }
+                  </label>
+                }
+
+              </div>
+            </section>
+          }
+
+          <!-- TRAVEL: DYNAMIC TRAVEL INSURANCE DETAILS -->
+          @if (travelFields().length) {
+            <section class="cf-card">
+              <div class="cf-section-title">
+                <span class="cf-step">3</span>
+                <div>
+                  <h3>Travel Insurance Details</h3>
+                  <p>Provide the information required for your travel quotation.</p>
+                </div>
+              </div>
+
+              <div class="cf-grid">
+
+                @for (f of travelFields(); track f.fieldName) {
+                  <label>
+
+                    {{ f.displayLabel }}
+
+                    @if (f.isMandatory) {
+                      <i class="cf-req">*</i>
+                    }
+
+                    <!-- COUNTRY FIELDS -->
+                    @if (isCountryField(f.fieldName)) {
+                      <select
+                        class="cf-input"
+                        [ngModel]="getConfiguredFieldValue(f.fieldName)"
+                        (ngModelChange)="setConfiguredFieldValue(f.fieldName, $event)"
+                        [name]="f.fieldName"
+                        autocomplete="off"
+                        [required]="f.isMandatory">
+
+                        <option value="">Select country</option>
+                        @for (c of countries(); track c.code) {
+                          <option [value]="c.code">{{ c.name }}</option>
+                        }
+                      </select>
+                    }
+
+                    <!-- OTHER CONFIGURED TRAVEL FIELDS -->
+                    @else {
+                      <input
+                        class="cf-input"
+                        [type]="inputType(f.dataType)"
+                        [ngModel]="getConfiguredFieldValue(f.fieldName)"
+                        (ngModelChange)="setConfiguredFieldValue(f.fieldName, $event)"
+                        [name]="f.fieldName"
+                        autocomplete="off"
+                        [required]="f.isMandatory"
+                        [min]="f.fieldName === 'travellers' ? 1 : null"
+                        [max]="f.fieldName === 'travellers' ? 20 : null"
+                        [step]="f.fieldName === 'travellers' ? 1 : null"
+                        [placeholder]="f.helpText || ''" />
+                    }
+
+                    @if (f.helpText) {
+                      <small class="cf-hint">{{ f.helpText }}</small>
+                    }
+
+                    @if (f.fieldName === 'travellers') {
+                      <small class="cf-hint">
+                        Enter the total number of people covered.
+                        Personal details are required for the applicant only.
+                      </small>
+                    }
+                  </label>
+                }
+
+              </div>
+            </section>
+          }
+
+        } @else {
+
+          <!-- NON-TRAVEL: PERSONAL DETAILS -->
+          <section class="cf-card">
+            <div class="cf-section-title">
+              <span class="cf-step">1</span>
+              <div>
+                <h3>Personal details</h3>
+                <p>Enter the applicant's contact and personal information.</p>
+              </div>
+            </div>
+
+            <div class="cf-grid">
+
+              <label>
+                Full name <i class="cf-req">*</i>
+                <input
+                  class="cf-input"
+                  type="text"
+                  [(ngModel)]="a.name"
+                  name="name"
+                  autocomplete="off"
+                  placeholder="Enter your full name"
+                  required />
+              </label>
+
+              <label>
+                Email address <i class="cf-req">*</i>
+                <input
+                  class="cf-input"
+                  type="email"
+                  [(ngModel)]="a.email"
+                  name="applicantEmail"
+                  autocomplete="off"
+                  placeholder="Enter your email address"
+                  required />
+              </label>
+
+              <label class="cf-phone-label">
+                Verified phone number
+                <div class="cf-phone-group">
+                  <select
+                    class="cf-input cf-phone-code"
+                    [(ngModel)]="phoneCallingCode"
+                    name="formPhoneCallingCode"
+                    autocomplete="off"
+                    [disabled]="true">
+                    @for (c of countries(); track c.code) {
+                      @if (getCallingCode(c)) {
+                        <option [value]="getCallingCode(c)">
+                          {{ getCallingCode(c) }} ({{ c.code }})
+                        </option>
+                      }
+                    }
+                  </select>
+
+                  <input
+                    class="cf-input cf-phone-number"
+                    type="tel"
+                    [ngModel]="a.phone"
+                    name="verifiedPhone"
+                    autocomplete="off"
+                    [placeholder]="link()?.client?.phoneMasked || 'Verified phone number'"
+                    readonly />
+                </div>
+                <small class="cf-field-note">✓ Mobile number verified</small>
+              </label>
+
+              <label>
+                Date of birth
+                <input
+                  class="cf-input"
+                  type="date"
+                  [(ngModel)]="a.dateOfBirth"
+                  name="dob"
+                  autocomplete="off" />
+              </label>
+
+              <label>
+                Gender
+                <select
+                  class="cf-input"
+                  [(ngModel)]="a.gender"
+                  name="gender"
+                  autocomplete="off">
+                  <option [ngValue]="null">Select gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </label>
+
+              <label>
+                Nationality
+                <input
+                  class="cf-input"
+                  type="text"
+                  [(ngModel)]="a.nationality"
+                  name="nationality"
+                  autocomplete="off"
+                  placeholder="Enter your nationality" />
+              </label>
+
+              <label>
+                Country of residence
+                <select
+                  class="cf-input"
+                  [(ngModel)]="a.countryOfResidence"
+                  name="countryOfResidence"
+                  autocomplete="off">
+                  <option [ngValue]="null">Select country</option>
+                  @for (c of countries(); track c.code) {
+                    <option [value]="c.code">{{ c.name }}</option>
+                  }
+                </select>
+              </label>
+
+            </div>
+          </section>
+
+          <!-- NON-TRAVEL: GOVERNMENT ID -->
+          <section class="cf-card">
+            <div class="cf-section-title">
+              <span class="cf-step">2</span>
+              <div>
+                <h3>Government ID</h3>
+                <p>Provide your identity document details.</p>
+              </div>
+            </div>
+
+            <div class="cf-alert cf-alert-info">
+              Your identity number is protected and is not displayed in full.
+            </div>
+
+            <div class="cf-grid">
+
+              <label>
+                Issuing country
+                <select
+                  class="cf-input"
+                  [ngModel]="a.identityCountry"
+                  (ngModelChange)="onIdCountry($event)"
+                  name="idc"
+                  autocomplete="off">
+                  <option [ngValue]="null">Select country</option>
+                  @for (c of countries(); track c.code) {
+                    <option [value]="c.code">{{ c.name }}</option>
+                  }
+                </select>
+              </label>
+
+              <label>
+                ID type
+                <select
+                  class="cf-input"
+                  [(ngModel)]="a.identityType"
+                  name="idt"
+                  autocomplete="off">
+                  <option [ngValue]="null">Select identity type</option>
+                  @for (t of idTypes(); track t.code) {
+                    <option [value]="t.code">{{ t.label }}</option>
+                  }
+                </select>
+              </label>
+
+              <label class="cf-wide">
+                ID number
+                <input
+                  class="cf-input"
+                  type="text"
+                  [(ngModel)]="a.identityNumber"
+                  name="identityDocumentNumber"
+                  autocomplete="off"
+                  [placeholder]="idExample()
+                    ? 'e.g. ' + idExample()
+                    : (link()?.client?.identityNumberMasked ?? '')" />
+              </label>
+
+            </div>
+          </section>
+
+          <!-- NON-TRAVEL: DYNAMIC INSURANCE FIELDS -->
+          @if (otherFields().length) {
+            <section class="cf-card">
+              <div class="cf-section-title">
+                <span class="cf-step">3</span>
+                <div>
+                  <h3>{{ form()!.label }} details</h3>
+                  <p>Provide the information required for your insurance quotation.</p>
+                </div>
+              </div>
+
+              <div class="cf-grid">
+                @for (f of otherFields(); track f.fieldName) {
+                  <label>
+                    {{ f.displayLabel }}
+
+                    @if (f.isMandatory) {
+                      <i class="cf-req">*</i>
+                    }
+
+                    <input
+                      class="cf-input"
+                      [type]="inputType(f.dataType)"
+                      [(ngModel)]="values[f.fieldName]"
+                      [name]="f.fieldName"
+                      autocomplete="off"
+                      [required]="f.isMandatory"
+                      [placeholder]="f.helpText || ''" />
+                  </label>
+                }
+              </div>
+            </section>
+          }
+
+        }
+
+        <!-- SUBMIT -->
+        <section class="cf-submit-card">
+          <div>
+            <h3>Ready to submit?</h3>
+            <p>Review your information before requesting your quotation.</p>
+            <small>🔒 Your information is handled securely.</small>
+          </div>
+
+          <button
+            type="submit"
+            class="cf-btn cf-btn-primary cf-submit-btn"
+            [disabled]="busy()">
+            {{ busy() ? 'Please wait...' : 'Get my quotation →' }}
+          </button>
+        </section>
+
+      </form>
+    }
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="cf-footer">
+    <div class="cf-footer-inner">
+      <strong>IQAS</strong>
+      <span>Your details are used only to prepare your insurance quotation.</span>
+      <span>Secure online application</span>
+    </div>
+  </footer>
+
+</div>

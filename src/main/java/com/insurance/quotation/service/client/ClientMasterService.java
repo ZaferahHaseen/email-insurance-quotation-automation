@@ -1,0 +1,684 @@
+package com.insurance.quotation.service.client;
+
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.insurance.quotation.entity.Client;
+import com.insurance.quotation.entity.ClientVersion;
+import com.insurance.quotation.repository.ClientRepository;
+import com.insurance.quotation.repository.ClientVersionRepository;
+import com.insurance.quotation.service.master.MasterDataService;
+
+/**
+ * The single place that creates, finds and changes client records.
+ *
+ * Rules:
+ * - A person is identified by identity document first, then email + name.
+ * - A shared email or mobile number never merges different people.
+ * - Empty existing details are filled automatically.
+ * - Sensitive existing details require OTP verification when changed.
+ * - Every applied change writes a new client_versions snapshot.
+ */
+@Service
+public class ClientMasterService {
+
+    /** Fields that require OTP verification when changing existing values. */
+    public static final Set<String> SENSITIVE_FIELDS = Set.of(
+            "name",
+            "phone",
+            "email",
+            "dateOfBirth",
+            "identityCountry",
+            "identityType",
+            "identityNumber"
+    );
+
+    public record ClientDetails(
+            String name,
+            String email,
+            String phone,
+            LocalDate dateOfBirth,
+            String gender,
+            String nationality,
+            String countryOfResidence,
+            String identityCountry,
+            String identityType,
+            String identityNumber) {
+
+        public boolean hasIdentity() {
+            return identityType != null && !identityType.isBlank()
+                    && identityNumber != null && !identityNumber.isBlank();
+        }
+    }
+
+    public record ApplyResult(
+            Client client,
+            List<String> filled,
+            List<String> changed,
+            List<String> blocked) {
+
+        public boolean hasBlockedChanges() {
+            return !blocked.isEmpty();
+        }
+    }
+
+    private final ClientRepository clientRepository;
+    private final ClientVersionRepository versionRepository;
+    private final IdentityProtectionService identity;
+    private final MasterDataService master;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ClientMasterService(
+            ClientRepository clientRepository,
+            ClientVersionRepository versionRepository,
+            IdentityProtectionService identity,
+            MasterDataService master) {
+
+        this.clientRepository = clientRepository;
+        this.versionRepository = versionRepository;
+        this.identity = identity;
+        this.master = master;
+    }
+
+    public ClientMasterService(
+            ClientRepository clientRepository,
+            ClientVersionRepository versionRepository,
+            IdentityProtectionService identity) {
+
+        this(clientRepository, versionRepository, identity, null);
+    }
+
+    /**
+     * Converts country names into country codes where possible.
+     */
+    private String country(ClientDetails d) {
+
+        String c = d.identityCountry();
+
+        if (c == null || c.isBlank()) {
+            return null;
+        }
+
+        String code = master == null
+                ? null
+                : master.resolveCountryCode(c);
+
+        return code != null
+                ? code
+                : c.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private String type(ClientDetails d) {
+
+        return d.identityType() == null || d.identityType().isBlank()
+                ? null
+                : MasterDataService.typeCode(d.identityType());
+    }
+
+    private String hashOf(ClientDetails d) {
+
+        return identity.hash(
+                country(d),
+                type(d),
+                d.identityNumber()
+        );
+    }
+
+    // --------------------------------------------------
+    // MOBILE NUMBER SEARCH
+    // --------------------------------------------------
+
+    /**
+     * Finds all clients registered with the entered mobile number.
+     *
+     * Multiple different people can share the same mobile number.
+     * This method returns all matching clients without merging them.
+     */
+    @Transactional(readOnly = true)
+    public List<Client> findClientsByMobile(String mobile) {
+
+        String normalizedPhone = normalizeIndianMobile(mobile);
+
+        if (normalizedPhone == null) {
+            return List.of();
+        }
+
+        return clientRepository.findAllByNormalizedPhone(normalizedPhone);
+    }
+
+    /**
+     * Normalizes an Indian mobile number.
+     *
+     * Supported examples:
+     * 9876543210
+     * +919876543210
+     * 919876543210
+     * +91 9876543210
+     * +91-9876543210
+     *
+     * Returns a 10-digit mobile number.
+     */
+    private String normalizeIndianMobile(String mobile) {
+
+        if (mobile == null || mobile.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Mobile number is required."
+            );
+        }
+
+        String digits = mobile.replaceAll("\\D", "");
+
+        // Remove Indian country code when present.
+        if (digits.length() == 12 && digits.startsWith("91")) {
+            digits = digits.substring(2);
+        }
+
+        if (digits.length() != 10) {
+            throw new IllegalArgumentException(
+                    "Please enter a valid 10-digit Indian mobile number."
+            );
+        }
+
+        return digits;
+    }
+
+    /**
+     * Finds an existing client without creating anything.
+     */
+    @Transactional(readOnly = true)
+    public Optional<Client> find(ClientDetails d) {
+
+        if (d.hasIdentity()) {
+
+            Optional<Client> byIdentity =
+                    clientRepository.findByIdentityNumberHash(hashOf(d));
+
+            if (byIdentity.isPresent()) {
+                return byIdentity;
+            }
+        }
+
+        List<Client> sameEmail =
+                clientRepository.findAllByEmailIgnoreCase(clean(d.email()));
+
+        List<Client> matches = new ArrayList<>();
+
+        for (Client c : sameEmail) {
+
+            if (isSamePerson(c, d, sameEmail.size())) {
+                matches.add(c);
+            }
+        }
+
+        // Do not guess when multiple people match.
+        return matches.size() == 1
+                ? Optional.of(matches.get(0))
+                : Optional.empty();
+    }
+
+    /**
+     * Finds the client or creates a new client record.
+     */
+    @Transactional
+    public ApplyResult findOrCreateAndApply(
+            ClientDetails d,
+            String source,
+            String actor,
+            boolean otpVerified) {
+
+        // Email is NOT NULL in the clients table.
+        String email = clean(d.email());
+
+        if (email.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Client email is required to create a client."
+            );
+        }
+
+        Optional<Client> existing = find(d);
+
+        if (existing.isPresent()) {
+            return apply(
+                    existing.get(),
+                    d,
+                    source,
+                    actor,
+                    otpVerified
+            );
+        }
+
+        Client c = new Client();
+
+        // Temporary code must fit VARCHAR(30).
+        c.setClientCode(
+                "TMP-" + UUID.randomUUID().toString().substring(0, 20)
+        );
+
+        c.setEmail(email);
+        c.setCreatedAt(LocalDateTime.now());
+        c.setUpdatedAt(LocalDateTime.now());
+        c.setVersionNo(1);
+
+        c.setName(blankToNull(d.name()));
+        c.setPhone(blankToNull(d.phone()));
+        c.setDateOfBirth(d.dateOfBirth());
+
+        c.setGender(blankToNull(d.gender()));
+        c.setNationality(blankToNull(d.nationality()));
+        c.setCountryOfResidence(
+                blankToNull(d.countryOfResidence())
+        );
+
+        setIdentity(c, d);
+
+        c = clientRepository.save(c);
+
+        // Generate the final client code using the database ID.
+        c.setClientCode(
+                String.format("CL-%06d", c.getId())
+        );
+
+        c = clientRepository.save(c);
+
+        writeVersion(
+                c,
+                source,
+                "created",
+                actor,
+                otpVerified
+        );
+
+        return new ApplyResult(
+                c,
+                List.of("created"),
+                List.of(),
+                List.of()
+        );
+    }
+
+    /**
+     * Applies submitted details to an existing client.
+     */
+    @Transactional
+    public ApplyResult apply(
+            Client client,
+            ClientDetails d,
+            String source,
+            String actor,
+            boolean otpVerified) {
+
+        List<String> filled = new ArrayList<>();
+        List<String> changed = new ArrayList<>();
+        List<String> blocked = new ArrayList<>();
+
+        // --------------------------------------------------
+        // Personal details
+        // --------------------------------------------------
+
+        merge(
+                "name",
+                client.getName(),
+                blankToNull(d.name()),
+                otpVerified,
+                client::setName,
+                filled,
+                changed,
+                blocked
+        );
+
+        merge(
+                "phone",
+                client.getPhone(),
+                blankToNull(d.phone()),
+                otpVerified,
+                client::setPhone,
+                filled,
+                changed,
+                blocked
+        );
+
+        merge(
+                "email",
+                client.getEmail(),
+                blankToNull(clean(d.email())),
+                otpVerified,
+                client::setEmail,
+                filled,
+                changed,
+                blocked
+        );
+
+        merge(
+                "gender",
+                client.getGender(),
+                blankToNull(d.gender()),
+                otpVerified,
+                client::setGender,
+                filled,
+                changed,
+                blocked
+        );
+
+        merge(
+                "nationality",
+                client.getNationality(),
+                blankToNull(d.nationality()),
+                otpVerified,
+                client::setNationality,
+                filled,
+                changed,
+                blocked
+        );
+
+        merge(
+                "countryOfResidence",
+                client.getCountryOfResidence(),
+                blankToNull(d.countryOfResidence()),
+                otpVerified,
+                client::setCountryOfResidence,
+                filled,
+                changed,
+                blocked
+        );
+
+        // --------------------------------------------------
+        // Date of birth
+        // --------------------------------------------------
+
+        if (d.dateOfBirth() != null) {
+
+            LocalDate current = client.getDateOfBirth();
+
+            if (current == null) {
+
+                client.setDateOfBirth(d.dateOfBirth());
+                filled.add("dateOfBirth");
+
+            } else if (!current.equals(d.dateOfBirth())) {
+
+                if (otpVerified) {
+
+                    client.setDateOfBirth(d.dateOfBirth());
+                    changed.add("dateOfBirth");
+
+                } else {
+
+                    blocked.add("dateOfBirth");
+                }
+            }
+        }
+
+        // --------------------------------------------------
+        // Identity document details
+        // --------------------------------------------------
+
+        if (d.hasIdentity()) {
+
+            String newHash = hashOf(d);
+
+            if (client.getIdentityNumberHash() == null) {
+
+                // Check whether another client owns this document.
+                Optional<Client> owner =
+                        clientRepository.findByIdentityNumberHash(newHash);
+
+                if (owner.isPresent()
+                        && !owner.get().getId().equals(client.getId())) {
+
+                    blocked.add("identityNumber");
+
+                } else {
+
+                    setIdentity(client, d);
+                    filled.add("identityNumber");
+                }
+
+            } else if (!newHash.equals(client.getIdentityNumberHash())) {
+
+                Optional<Client> owner =
+                        clientRepository.findByIdentityNumberHash(newHash);
+
+                if (owner.isPresent()
+                        && !owner.get().getId().equals(client.getId())) {
+
+                    blocked.add("identityNumber");
+
+                } else if (otpVerified) {
+
+                    setIdentity(client, d);
+                    changed.add("identityNumber");
+
+                } else {
+
+                    blocked.add("identityNumber");
+                }
+            }
+        }
+
+        // --------------------------------------------------
+        // Save changes and create version history
+        // --------------------------------------------------
+
+        if (!filled.isEmpty() || !changed.isEmpty()) {
+
+            int currentVersion = client.getVersionNo() == null
+                    ? 1
+                    : client.getVersionNo();
+
+            client.setVersionNo(currentVersion + 1);
+            client.setUpdatedAt(LocalDateTime.now());
+
+            clientRepository.save(client);
+
+            List<String> all = new ArrayList<>(filled);
+            all.addAll(changed);
+
+            writeVersion(
+                    client,
+                    source,
+                    String.join(",", all),
+                    actor,
+                    otpVerified
+            );
+        }
+
+        return new ApplyResult(
+                client,
+                filled,
+                changed,
+                blocked
+        );
+    }
+
+    /**
+     * Marks the phone number as verified after successful OTP verification.
+     */
+    @Transactional
+    public void markPhoneVerified(Client client) {
+
+        client.setPhoneVerifiedAt(LocalDateTime.now());
+
+        clientRepository.save(client);
+    }
+
+    // --------------------------------------------------
+    // Client matching
+    // --------------------------------------------------
+
+    private boolean isSamePerson(
+            Client c,
+            ClientDetails d,
+            int candidatesWithEmail) {
+
+        // A different identity document means a different person.
+        if (d.hasIdentity() && c.getIdentityNumberHash() != null) {
+
+            String h = hashOf(d);
+
+            return h.equals(c.getIdentityNumberHash());
+        }
+
+        String incoming = normalizeName(d.name());
+        String stored = normalizeName(c.getName());
+
+        if (!incoming.isEmpty() && !stored.isEmpty()) {
+            return incoming.equals(stored);
+        }
+
+        // Without a name, match only when the email belongs to one person.
+        return candidatesWithEmail == 1;
+    }
+
+    // --------------------------------------------------
+    // Field merging
+    // --------------------------------------------------
+
+    private interface Setter {
+        void set(String value);
+    }
+
+    private void merge(
+            String field,
+            String current,
+            String incoming,
+            boolean otpVerified,
+            Setter setter,
+            List<String> filled,
+            List<String> changed,
+            List<String> blocked) {
+
+        if (incoming == null) {
+            return;
+        }
+
+        // Fill empty fields without overwriting existing information.
+        if (current == null || current.isBlank()) {
+
+            setter.set(incoming);
+            filled.add(field);
+            return;
+        }
+
+        if (current.equalsIgnoreCase(incoming)) {
+            return;
+        }
+
+        boolean sensitive = SENSITIVE_FIELDS.contains(field);
+
+        if (!sensitive || otpVerified) {
+
+            setter.set(incoming);
+            changed.add(field);
+
+        } else {
+
+            blocked.add(field);
+        }
+    }
+
+    // --------------------------------------------------
+    // Identity encryption
+    // --------------------------------------------------
+
+    private void setIdentity(Client c, ClientDetails d) {
+
+        if (!d.hasIdentity()) {
+            return;
+        }
+
+        c.setIdentityCountry(country(d));
+        c.setIdentityType(type(d));
+
+        // Never store the raw identity number.
+        c.setIdentityNumberEnc(
+                identity.encrypt(d.identityNumber())
+        );
+
+        c.setIdentityNumberHash(
+                hashOf(d)
+        );
+
+        c.setIdentityNumberLast4(
+                identity.last4(d.identityNumber())
+        );
+    }
+
+    // --------------------------------------------------
+    // Client version history
+    // --------------------------------------------------
+
+    private void writeVersion(
+            Client c,
+            String source,
+            String changedFields,
+            String actor,
+            boolean otp) {
+
+        ClientVersion v = new ClientVersion();
+
+        v.setClient(c);
+        v.setVersionNo(c.getVersionNo());
+
+        v.setName(c.getName());
+        v.setEmail(c.getEmail());
+        v.setPhone(c.getPhone());
+        v.setDateOfBirth(c.getDateOfBirth());
+
+        v.setGender(c.getGender());
+        v.setNationality(c.getNationality());
+        v.setCountryOfResidence(c.getCountryOfResidence());
+
+        v.setIdentityCountry(c.getIdentityCountry());
+        v.setIdentityType(c.getIdentityType());
+        v.setIdentityNumberLast4(c.getIdentityNumberLast4());
+
+        v.setChangeSource(source);
+
+        v.setChangedFields(
+                changedFields.length() > 500
+                        ? changedFields.substring(0, 500)
+                        : changedFields
+        );
+
+        v.setChangedBy(actor);
+        v.setOtpVerified(otp);
+
+        versionRepository.save(v);
+    }
+
+    // --------------------------------------------------
+    // Utility methods
+    // --------------------------------------------------
+
+    private static String clean(String email) {
+
+        return email == null
+                ? ""
+                : email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private static String blankToNull(String value) {
+
+        return value == null || value.isBlank()
+                ? null
+                : value.trim();
+    }
+
+    private static String normalizeName(String value) {
+
+        return value == null
+                ? ""
+                : value.trim()
+                        .replaceAll("\\s+", " ")
+                        .toLowerCase(Locale.ROOT);
+    }
+}
